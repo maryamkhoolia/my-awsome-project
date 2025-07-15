@@ -129,10 +129,10 @@
     // --- Config ---
     const CARD_ASPECT = 0.53;
     const CARD_HEIGHT_RATIO = 0.7;
-    const SPOTLIGHT_LEFT_RATIO = 0.19;
-    const STACK_MARGIN_RATIO = 0.04;
-    const STACK_OFFSET_BASE = 0.15; // in vh
-    const STACK_OFFSET_VARIANCE = 0.025; // in vh
+    const SPOTLIGHT_LEFT_VW = 19; // percent of viewport width
+    const STACK_MARGIN_VW = 4;    // percent of viewport width
+    const STACK_OFFSET_BASE_VW = 15; // percent of viewport width
+    const STACK_OFFSET_VARIANCE_VW = 2.5; // percent of viewport width
     const ANIMATION_BEZIER = 'cubic-bezier(0.47,0,0.23,1.38)';
     const ANIMATION_DURATION = 700; // ms
     const STAGGER = 80; // ms
@@ -152,8 +152,6 @@
 
     // --- State ---
     let spotlightIdx = 0;
-    let scrollStartY = null;
-    let lastScrollY = window.scrollY;
     let isAnimating = false;
     let stackOffsets = [];
 
@@ -165,9 +163,9 @@
     function calcStackOffsets(n) {
       // Returns array of offsets (in px) for stack cards
       let offsets = [];
-      let base = vh(STACK_OFFSET_BASE);
+      let base = vw(STACK_OFFSET_BASE_VW);
       for (let i = 0; i < n; ++i) {
-        let variance = (Math.random() * 2 - 1) * vh(STACK_OFFSET_VARIANCE);
+        let variance = (Math.random() * 2 - 1) * vw(STACK_OFFSET_VARIANCE_VW);
         offsets.push(base + variance);
       }
       return offsets;
@@ -176,10 +174,12 @@
     function renderCards() {
       const container = document.getElementById('cards-container');
       container.innerHTML = '';
+      // Card height is 70vh, but clamp width to max 90vw
       const cardH = vh(CARD_HEIGHT_RATIO);
-      const cardW = cardH * CARD_ASPECT;
-      const leftSpotlight = vh(SPOTLIGHT_LEFT_RATIO);
-      const leftFirstStack = leftSpotlight + cardW + vh(STACK_MARGIN_RATIO);
+      let cardW = cardH * CARD_ASPECT;
+      cardW = Math.min(cardW, vw(90));
+      const leftSpotlight = vw(SPOTLIGHT_LEFT_VW);
+      const leftFirstStack = leftSpotlight + cardW + vw(STACK_MARGIN_VW);
       // Calculate stack offsets
       stackOffsets = calcStackOffsets(NUM_CARDS - 1);
       let lefts = [leftSpotlight];
@@ -217,10 +217,12 @@
       isAnimating = true;
       const container = document.getElementById('cards-container');
       const cards = Array.from(container.children);
+      // Card height is 70vh, but clamp width to max 90vw
       const cardH = vh(CARD_HEIGHT_RATIO);
-      const cardW = cardH * CARD_ASPECT;
-      const leftSpotlight = vh(SPOTLIGHT_LEFT_RATIO);
-      const leftFirstStack = leftSpotlight + cardW + vh(STACK_MARGIN_RATIO);
+      let cardW = cardH * CARD_ASPECT;
+      cardW = Math.min(cardW, vw(90));
+      const leftSpotlight = vw(SPOTLIGHT_LEFT_VW);
+      const leftFirstStack = leftSpotlight + cardW + vw(STACK_MARGIN_VW);
       // Calculate new stack offsets
       stackOffsets = calcStackOffsets(NUM_CARDS - 1);
       let lefts = [leftSpotlight];
@@ -283,7 +285,6 @@
 
     // --- Scroll Handling ---
     let scrollBuffer = 0;
-    let lastScrollDir = null;
     window.addEventListener('wheel', (e) => {
       if (isAnimating) return;
       scrollBuffer += e.deltaY;
