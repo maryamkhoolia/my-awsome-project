@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Interactive Card Stack</title>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background: #f2f2f2;
+      font-family: 'JetBrains Mono', 'Fira Mono', 'Menlo', 'monospace', monospace;
+      color: #222;
+      box-sizing: border-box;
+    }
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .main-content {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      min-height: 80vh;
+      position: relative;
+      overflow-x: hidden;
+    }
+    .cards-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+    }
+    .card {
+      position: absolute;
+      top: 15vh;
+      background: #fff;
+      border-radius: 18px;
+      border: 3px solid #222;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      padding: 32px 24px 24px 24px;
+      font-size: 2.2rem;
+      font-weight: 500;
+      letter-spacing: 0.01em;
+      transition:
+        box-shadow 0.5s cubic-bezier(0.47,0,0.23,1.38),
+        left 0.7s cubic-bezier(0.47,0,0.23,1.38),
+        transform 0.7s cubic-bezier(0.47,0,0.23,1.38),
+        opacity 0.7s cubic-bezier(0.47,0,0.23,1.38);
+      will-change: left, transform, opacity, box-shadow;
+      opacity: 1;
+      z-index: 1;
+      pointer-events: auto;
+    }
+    .card.spotlight {
+      box-shadow: 0px 594px 166px 0px rgba(0, 0, 0, 0.00),
+                  0px 380px 152px 0px rgba(0, 0, 0, 0.02),
+                  0px 214px 128px 0px rgba(0, 0, 0, 0.08),
+                  0px 95px 95px 0px rgba(0, 0, 0, 0.13),
+                  0px 24px 52px 0px rgba(0, 0, 0, 0.15);
+      z-index: 10;
+    }
+    .card.stack {
+      box-shadow: 183px 565px 166px 0px rgba(0, 0, 0, 0.00),
+                  117px 361px 152px 0px rgba(0, 0, 0, 0.01),
+                  66px 203px 128px 0px rgba(0, 0, 0, 0.03),
+                  29px 90px 95px 0px rgba(0, 0, 0, 0.08),
+                  7px 23px 52px 0px rgba(0, 0, 0, 0.10);
+      z-index: 1;
+    }
+    .card .card-number {
+      font-size: 2.8rem;
+      font-weight: 700;
+      color: #222;
+      opacity: 0.18;
+      position: absolute;
+      bottom: 24px;
+      left: 24px;
+      pointer-events: none;
+    }
+    .card .card-content {
+      font-size: 1.1rem;
+      color: #444;
+      margin-bottom: 32px;
+      pointer-events: none;
+    }
+    .footer {
+      width: 100vw;
+      padding: 24px 0 16px 0;
+      text-align: center;
+      font-size: 1rem;
+      color: #888;
+      letter-spacing: 0.04em;
+      background: none;
+      user-select: none;
+    }
+    @media (max-width: 700px) {
+      .card {
+        font-size: 1.2rem;
+        padding: 18px 10px 10px 10px;
+      }
+      .card .card-number {
+        font-size: 1.5rem;
+        left: 10px;
+        bottom: 10px;
+      }
+      .card .card-content {
+        font-size: 0.9rem;
+        margin-bottom: 18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="main-content">
+    <div class="cards-container" id="cards-container"></div>
+  </div>
+  <div class="footer">
+    &copy; 2024 Interactive Card Stack Demo &mdash; Scroll up/down to interact
+  </div>
+  <script>
+    // --- Config ---
+    const CARD_ASPECT = 0.53;
+    const CARD_HEIGHT_RATIO = 0.7;
+    const SPOTLIGHT_LEFT_RATIO = 0.19;
+    const STACK_MARGIN_RATIO = 0.04;
+    const STACK_OFFSET_BASE = 0.15; // in vh
+    const STACK_OFFSET_VARIANCE = 0.025; // in vh
+    const ANIMATION_BEZIER = 'cubic-bezier(0.47,0,0.23,1.38)';
+    const ANIMATION_DURATION = 700; // ms
+    const STAGGER = 80; // ms
+    const SCROLL_THRESHOLD = 50; // px
+    const ROTATE_DEG = 20;
+    const NUM_CARDS = 6;
+
+    // --- Card Data ---
+    const cardContents = [
+      { number: 1, content: 'Spotlight: This card is under the spotlight. Scroll to animate.' },
+      { number: 2, content: 'Stacked card. Each card moves left as you scroll.' },
+      { number: 3, content: 'Cards have organic spacing and springy animation.' },
+      { number: 4, content: 'Try scrolling up to reverse the animation.' },
+      { number: 5, content: 'Each card has a unique drop shadow.' },
+      { number: 6, content: 'You can add more cards easily.' },
+    ];
+
+    // --- State ---
+    let spotlightIdx = 0;
+    let scrollStartY = null;
+    let lastScrollY = window.scrollY;
+    let isAnimating = false;
+    let stackOffsets = [];
+
+    // --- Helpers ---
+    function vh(v) { return window.innerHeight * (v / 100); }
+    function vw(v) { return window.innerWidth * (v / 100); }
+    function clamp(val, min, max) { return Math.max(min, Math.min(max, val)); }
+
+    function calcStackOffsets(n) {
+      // Returns array of offsets (in px) for stack cards
+      let offsets = [];
+      let base = vh(STACK_OFFSET_BASE);
+      for (let i = 0; i < n; ++i) {
+        let variance = (Math.random() * 2 - 1) * vh(STACK_OFFSET_VARIANCE);
+        offsets.push(base + variance);
+      }
+      return offsets;
+    }
+
+    function renderCards() {
+      const container = document.getElementById('cards-container');
+      container.innerHTML = '';
+      const cardH = vh(CARD_HEIGHT_RATIO);
+      const cardW = cardH * CARD_ASPECT;
+      const leftSpotlight = vh(SPOTLIGHT_LEFT_RATIO);
+      const leftFirstStack = leftSpotlight + cardW + vh(STACK_MARGIN_RATIO);
+      // Calculate stack offsets
+      stackOffsets = calcStackOffsets(NUM_CARDS - 1);
+      let lefts = [leftSpotlight];
+      let acc = leftFirstStack;
+      for (let i = 0; i < stackOffsets.length; ++i) {
+        lefts.push(acc);
+        acc += stackOffsets[i];
+      }
+      // Render cards
+      for (let i = 0; i < NUM_CARDS; ++i) {
+        const isSpotlight = (i === spotlightIdx);
+        const isStack = (i > spotlightIdx);
+        const card = document.createElement('div');
+        card.className = 'card' + (isSpotlight ? ' spotlight' : '') + (isStack ? ' stack' : '');
+        card.style.width = cardW + 'px';
+        card.style.height = cardH + 'px';
+        card.style.left = lefts[i] + 'px';
+        card.style.opacity = '1';
+        card.style.transform = 'none';
+        card.style.transition =
+          'box-shadow 0.5s ' + ANIMATION_BEZIER + ', ' +
+          'left 0.7s ' + ANIMATION_BEZIER + ', ' +
+          'transform 0.7s ' + ANIMATION_BEZIER + ', ' +
+          'opacity 0.7s ' + ANIMATION_BEZIER;
+        card.innerHTML = `
+          <div class="card-content">${cardContents[i].content}</div>
+          <div class="card-number">${cardContents[i].number}</div>
+        `;
+        container.appendChild(card);
+      }
+    }
+
+    function animateCards(direction) {
+      if (isAnimating) return;
+      isAnimating = true;
+      const container = document.getElementById('cards-container');
+      const cards = Array.from(container.children);
+      const cardH = vh(CARD_HEIGHT_RATIO);
+      const cardW = cardH * CARD_ASPECT;
+      const leftSpotlight = vh(SPOTLIGHT_LEFT_RATIO);
+      const leftFirstStack = leftSpotlight + cardW + vh(STACK_MARGIN_RATIO);
+      // Calculate new stack offsets
+      stackOffsets = calcStackOffsets(NUM_CARDS - 1);
+      let lefts = [leftSpotlight];
+      let acc = leftFirstStack;
+      for (let i = 0; i < stackOffsets.length; ++i) {
+        lefts.push(acc);
+        acc += stackOffsets[i];
+      }
+      // Animate out spotlight card
+      const spotlightCard = cards[spotlightIdx];
+      if (direction === 'down') {
+        spotlightCard.style.transform = `translateX(-${cardW * 0.7}px) rotate(-${ROTATE_DEG}deg)`;
+        spotlightCard.style.opacity = '0';
+      } else {
+        // Animate in from left
+        spotlightCard.style.transform = `translateX(${cardW * 0.7}px) rotate(${ROTATE_DEG}deg)`;
+        spotlightCard.style.opacity = '0';
+      }
+      // Animate stack cards
+      let newSpotlightIdx = clamp(spotlightIdx + (direction === 'down' ? 1 : -1), 0, NUM_CARDS - 1);
+      for (let i = 0; i < NUM_CARDS; ++i) {
+        if (i === spotlightIdx) continue;
+        let newIdx = i + (direction === 'down' ? -1 : 1);
+        if (direction === 'down' && i === spotlightIdx + 1) {
+          // This card becomes new spotlight
+          setTimeout(() => {
+            cards[i].classList.add('spotlight');
+            cards[i].classList.remove('stack');
+            cards[i].style.left = leftSpotlight + 'px';
+            cards[i].style.transform = 'none';
+            cards[i].style.opacity = '1';
+          }, STAGGER);
+        } else if (direction === 'up' && i === spotlightIdx - 1) {
+          // This card becomes new spotlight
+          setTimeout(() => {
+            cards[i].classList.add('spotlight');
+            cards[i].classList.remove('stack');
+            cards[i].style.left = leftSpotlight + 'px';
+            cards[i].style.transform = 'none';
+            cards[i].style.opacity = '1';
+          }, STAGGER);
+        } else if (newIdx > spotlightIdx && newIdx < NUM_CARDS) {
+          // Move stack card left/right
+          setTimeout(() => {
+            cards[i].classList.add('stack');
+            cards[i].classList.remove('spotlight');
+            cards[i].style.left = lefts[newIdx] + 'px';
+            cards[i].style.transform = 'none';
+            cards[i].style.opacity = '1';
+          }, STAGGER * (Math.abs(newIdx - spotlightIdx)));
+        }
+      }
+      // After animation, update state and re-render
+      setTimeout(() => {
+        spotlightIdx = newSpotlightIdx;
+        renderCards();
+        isAnimating = false;
+      }, ANIMATION_DURATION + STAGGER * 2);
+    }
+
+    // --- Scroll Handling ---
+    let scrollBuffer = 0;
+    let lastScrollDir = null;
+    window.addEventListener('wheel', (e) => {
+      if (isAnimating) return;
+      scrollBuffer += e.deltaY;
+      let dir = scrollBuffer > 0 ? 'down' : 'up';
+      if (Math.abs(scrollBuffer) > SCROLL_THRESHOLD) {
+        if (dir === 'down' && spotlightIdx < NUM_CARDS - 1) {
+          animateCards('down');
+        } else if (dir === 'up' && spotlightIdx > 0) {
+          animateCards('up');
+        }
+        scrollBuffer = 0;
+      }
+    }, { passive: true });
+
+    // Touch support
+    let touchStartY = null;
+    window.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 1) {
+        touchStartY = e.touches[0].clientY;
+      }
+    });
+    window.addEventListener('touchmove', (e) => {
+      if (isAnimating || touchStartY === null) return;
+      let deltaY = touchStartY - e.touches[0].clientY;
+      scrollBuffer += deltaY;
+      let dir = scrollBuffer > 0 ? 'down' : 'up';
+      if (Math.abs(scrollBuffer) > SCROLL_THRESHOLD) {
+        if (dir === 'down' && spotlightIdx < NUM_CARDS - 1) {
+          animateCards('down');
+        } else if (dir === 'up' && spotlightIdx > 0) {
+          animateCards('up');
+        }
+        scrollBuffer = 0;
+        touchStartY = e.touches[0].clientY;
+      }
+    }, { passive: true });
+    window.addEventListener('touchend', () => {
+      touchStartY = null;
+    });
+
+    // --- Responsive ---
+    window.addEventListener('resize', () => {
+      renderCards();
+    });
+
+    // --- Init ---
+    renderCards();
+  </script>
+</body>
+</html>
