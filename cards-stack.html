@@ -121,6 +121,7 @@
 <body>
   <div class="main-content">
     <div class="cards-container" id="cards-container"></div>
+    <div id="debug-overlay" style="position:fixed;top:0;left:0;z-index:9999;background:rgba(255,255,0,0.2);color:#222;font-size:14px;padding:6px 12px;pointer-events:none;max-width:60vw;"></div>
   </div>
   <div class="footer">
     &copy; 2024 Interactive Card Stack Demo &mdash; Scroll up/down to interact
@@ -176,16 +177,16 @@
     function renderCards() {
       const container = document.getElementById('cards-container');
       container.innerHTML = '';
-      const cardH = vh(CARD_HEIGHT_RATIO);
+      const cardH = Math.min(vh(CARD_HEIGHT_RATIO), window.innerWidth * 0.7); // Clamp for small screens
       const cardW = cardH * CARD_ASPECT;
-      const leftSpotlight = vh(SPOTLIGHT_LEFT_RATIO);
+      const leftSpotlight = Math.max(0, Math.min(vh(SPOTLIGHT_LEFT_RATIO), window.innerWidth - cardW - 10));
       const leftFirstStack = leftSpotlight + cardW + vh(STACK_MARGIN_RATIO);
       // Calculate stack offsets
       stackOffsets = calcStackOffsets(NUM_CARDS - 1);
       let lefts = [leftSpotlight];
       let acc = leftFirstStack;
       for (let i = 0; i < stackOffsets.length; ++i) {
-        lefts.push(acc);
+        lefts.push(Math.min(acc, window.innerWidth - cardW - 10));
         acc += stackOffsets[i];
       }
       // Render cards
@@ -210,6 +211,10 @@
         `;
         container.appendChild(card);
       }
+      // Debug overlay
+      const debug = document.getElementById('debug-overlay');
+      debug.textContent = `spotlightIdx: ${spotlightIdx}, cardH: ${cardH.toFixed(1)}, cardW: ${cardW.toFixed(1)}, lefts: [${lefts.map(x=>x.toFixed(1)).join(', ')}], window.innerWidth: ${window.innerWidth}, window.innerHeight: ${window.innerHeight}`;
+      console.log('renderCards', {spotlightIdx, cardH, cardW, lefts, windowW: window.innerWidth, windowH: window.innerHeight});
     }
 
     function animateCards(direction) {
